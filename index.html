@@ -1,0 +1,771 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AERO STRIKE VECTOR - Next-Gen Flight Simulator</title>
+    <style>
+        /* Reset and Font */
+        body, html { margin: 0; padding: 0; overflow: hidden; background: #000; font-family: 'Segoe UI', system-ui, -apple-system, Roboto, Helvetica, Arial, sans-serif; user-select: none; }
+        #gameCanvas { display: block; width: 100vw; height: 100vh; }
+
+        /* Modern Glassmorphism UI */
+        #hud { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; padding: 30px 40px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; z-index: 5; color: #e0f2fe; text-shadow: 0 1px 4px rgba(0,0,0,0.8); }
+
+        .hud-panel { background: rgba(10, 20, 30, 0.4); border: 1px solid rgba(100, 200, 255, 0.15); border-radius: 8px; padding: 15px 25px; backdrop-filter: blur(8px); box-shadow: 0 8px 32px rgba(0,0,0,0.3); }
+        .hud-row { display: flex; justify-content: space-between; align-items: flex-start; }
+        .hud-col { display: flex; flex-direction: column; gap: 8px; }
+        .hud-right { text-align: right; align-items: flex-end; }
+
+        /* Typography */
+        .label { font-size: 0.85rem; font-weight: 700; letter-spacing: 2px; color: #7dd3fc; text-transform: uppercase; margin-bottom: 2px; }
+        .value { font-size: 1.5rem; font-weight: 700; font-family: 'Courier New', Courier, monospace; color: #fff; }
+
+        /* Gradient Bars */
+        .bar-container { width: 200px; height: 6px; background: rgba(0,0,0,0.5); border-radius: 3px; overflow: hidden; border: 1px solid rgba(255,255,255,0.1); margin-top: 4px; }
+        .bar-fill { height: 100%; background: #38bdf8; transition: width 0.15s ease-out; box-shadow: 0 0 10px #38bdf8; }
+
+        #hp-container.danger .bar-fill { background: #ef4444; box-shadow: 0 0 10px #ef4444; }
+        #hp-container.danger .value, #hp-container.danger .label { color: #ef4444; }
+
+        /* Precision Rotating Crosshair */
+        #crosshair { position: absolute; top: 50%; left: 50%; width: 50px; height: 50px; transform: translate(-50%, -50%); border: 1px solid rgba(255,255,255,0.2); border-radius: 50%; transition: transform 0.05s linear; }
+        .crosshair-center { position: absolute; top: 50%; left: 50%; width: 4px; height: 4px; transform: translate(-50%, -50%); background: #38bdf8; border-radius: 50%; box-shadow: 0 0 8px #38bdf8; }
+        .crosshair-tick { position: absolute; background: rgba(255,255,255,0.7); }
+        .crosshair-tick.t { top: -8px; left: 24px; width: 2px; height: 12px; }
+        .crosshair-tick.b { bottom: -8px; left: 24px; width: 2px; height: 12px; }
+        .crosshair-tick.l { left: -8px; top: 24px; width: 12px; height: 2px; }
+        .crosshair-tick.r { right: -8px; top: 24px; width: 12px; height: 2px; }
+        .horizon-line { position: absolute; top: 50%; left: -60px; width: 170px; height: 1px; background: rgba(255,255,255,0.3); pointer-events: none; }
+
+        /* Alerts */
+        #warning { position: absolute; top: 25%; left: 50%; transform: translateX(-50%); color: #ef4444; font-size: 1.5rem; font-weight: 800; letter-spacing: 4px; display: none; background: rgba(50,0,0,0.8); padding: 10px 30px; border-radius: 6px; border: 1px solid #ef4444; box-shadow: 0 0 20px rgba(239, 68, 68, 0.4); animation: pulse 1s infinite; backdrop-filter: blur(4px); text-transform: uppercase; }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+        #damage-flash { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle, transparent 40%, rgba(239, 68, 68, 0.5) 100%); opacity: 0; pointer-events: none; transition: opacity 0.1s; z-index: 4; }
+
+        /* Cinematic Screens */
+        .screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background: radial-gradient(circle at center, rgba(15,23,42,0.85) 0%, rgba(2,6,23,0.95) 100%); display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 10; pointer-events: auto; color: #f8fafc; text-align: center; backdrop-filter: blur(10px); transition: opacity 0.5s ease; }
+        h1 { font-size: 4rem; font-weight: 900; margin-bottom: 5px; text-transform: uppercase; letter-spacing: 10px; background: linear-gradient(to right, #f8fafc, #38bdf8); -webkit-background-clip: text; -webkit-text-fill-color: transparent; filter: drop-shadow(0 4px 15px rgba(56,189,248,0.3)); margin-top: 0; }
+        .subtitle { font-size: 1.2rem; color: #7dd3fc; letter-spacing: 6px; margin-bottom: 40px; text-transform: uppercase; font-weight: 600; }
+        
+        .controls-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 30px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); padding: 35px; text-align: left; margin-bottom: 40px; font-size: 1rem; line-height: 1.8; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); max-width: 800px; }
+        .controls-grid strong { color: #38bdf8; font-size: 1.1rem; letter-spacing: 1px; display: inline-block; margin-bottom: 12px; border-bottom: 1px solid rgba(56,189,248,0.3); padding-bottom: 4px; width: 100%; }
+        .key { color: #e0f2fe; background: rgba(255,255,255,0.1); padding: 2px 8px; border-radius: 4px; font-family: monospace; font-size: 0.9rem; border: 1px solid rgba(255,255,255,0.2); }
+        
+        button { padding: 16px 50px; background: #0284c7; border: 1px solid #38bdf8; color: #fff; font-size: 1.2rem; font-weight: bold; cursor: pointer; text-transform: uppercase; letter-spacing: 3px; transition: all 0.2s cubic-bezier(0.25, 0.8, 0.25, 1); border-radius: 30px; box-shadow: 0 4px 15px rgba(2, 132, 199, 0.5); }
+        button:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(56, 189, 248, 0.6); background: #0369a1; }
+        button:active { transform: translateY(1px); box-shadow: 0 2px 10px rgba(2, 132, 199, 0.5); }
+        .hidden { opacity: 0; pointer-events: none; visibility: hidden; }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+</head>
+<body>
+
+    <div id="damage-flash"></div>
+
+    <div id="hud" class="hidden">
+        <div class="hud-row">
+            <div id="hp-container" class="hud-panel hud-col">
+                <div class="label">HULL INTEGRITY</div>
+                <div class="value"><span id="hp">100</span>%</div>
+                <div class="bar-container"><div id="hp-bar" class="bar-fill" style="width: 100%;"></div></div>
+            </div>
+            <div class="hud-panel hud-col hud-right">
+                <div class="label">TARGETS ELIMINATED</div>
+                <div class="value" style="color: #38bdf8; font-size: 2.2rem;"><span id="score">0</span></div>
+            </div>
+        </div>
+        
+        <div id="crosshair">
+            <div class="horizon-line"></div>
+            <div class="crosshair-tick t"></div><div class="crosshair-tick b"></div>
+            <div class="crosshair-tick l"></div><div class="crosshair-tick r"></div>
+            <div class="crosshair-center"></div>
+        </div>
+        <div id="warning">STALL WARNING</div>
+        
+        <div class="hud-row" style="align-items: flex-end;">
+            <div class="hud-panel hud-col">
+                <div class="label">THROTTLE: <span class="value" style="font-size: 1.1rem;" id="thr-text">0</span><span class="value" style="font-size: 1.1rem;">%</span></div>
+                <div class="bar-container" style="margin-bottom: 8px; width: 180px;"><div id="thr-bar" class="bar-fill" style="width: 0%;"></div></div>
+                <div class="label">AIRSPEED</div>
+                <div class="value"><span id="spd">000</span> KTS</div>
+                <div class="label" style="margin-top: 5px;">ALTITUDE</div>
+                <div class="value"><span id="alt">0000</span> FT</div>
+            </div>
+            <div class="hud-panel hud-col hud-right">
+                <div class="label">DISTANCE TO BASE</div>
+                <div class="value" style="font-size: 1.1rem; color: #cbd5e1; margin-bottom: 5px;" id="runway-dist">0 M</div>
+                <div class="label">SYSTEM STATUS</div>
+                <div id="status" class="value" style="font-size: 1.3rem; color: #fbbf24;">TAXIING</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="start-screen" class="screen">
+        <div class="subtitle">TACTICAL AIR COMBAT SIMULATOR</div>
+        <h1>AERO STRIKE VECTOR</h1>
+        <div class="controls-grid">
+            <div>
+                <strong>FLIGHT SYSTEMS</strong>
+                <span class="key">W</span> / <span class="key">S</span> or <span class="key">Scroll</span> : Throttle<br>
+                <span class="key">Mouse</span> : Pitch & Roll (Virtual Stick)<br>
+                <span class="key">A</span> / <span class="key">D</span> : Yaw & Roll Override<br>
+                <span class="key">Space</span> or <span class="key">L-Click</span> : Fire Autocannons
+            </div>
+            <div>
+                <strong>MISSION DIRECTIVE</strong>
+                1. Throttle up >80 KTS, pitch up to takeoff.<br>
+                2. Intercept and eliminate hostile aircraft.<br>
+                3. Maintain airspeed to avoid stalling.<br>
+                4. Land at the airstrip to repair & refuel.
+            </div>
+        </div>
+        <button id="start-btn">INITIATE LAUNCH</button>
+    </div>
+
+    <div id="gameover-screen" class="screen hidden" style="background: radial-gradient(circle at center, rgba(60,10,10,0.95) 0%, rgba(10,0,0,0.95) 100%);">
+        <h1 style="color: #ef4444; background: none; -webkit-text-fill-color: #ef4444; filter: drop-shadow(0 0 20px rgba(239,68,68,0.5));">SIGNAL LOST</h1>
+        <p id="death-reason" style="font-size: 1.2rem; color: #fca5a5; margin-bottom: 20px; font-weight: 600; letter-spacing: 2px;">AIRCRAFT DESTROYED</p>
+        <p style="font-size: 1.5rem; margin-bottom: 40px; color: #f8fafc;">FINAL SCORE: <span id="final-score" style="font-weight:900; color: #38bdf8; font-size: 2.5rem;">0</span></p>
+        <button id="restart-btn" style="background: #b91c1c; border-color: #ef4444; box-shadow: 0 4px 15px rgba(185,28,28,0.5);">REDEPLOY</button>
+    </div>
+
+<script>
+/**
+ * ------------------------------------------------------------------
+ * 1. GLOBALS, ENGINE & CONSTANTS
+ * ------------------------------------------------------------------
+ */
+const scene = new THREE.Scene();
+scene.fog = new THREE.FogExp2(0x0a1525, 0.0001);
+
+const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 1, 30000);
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: "high-performance" });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+// Modern Photorealistic PBR Rendering Engine Overhaul
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.0;
+renderer.outputEncoding = THREE.sRGBEncoding;
+document.body.appendChild(renderer.domElement);
+
+const clock = new THREE.Clock();
+
+// Game State
+let gameState = 'MENU';
+let hp = 100, score = 0, currentSpeed = 0, targetSpeed = 0;
+const MAX_SPEED = 400, STALL_SPEED = 70, GRAVITY = 90;
+let isLanded = true, isStalling = false, fireCooldown = 0, spawnTimer = 0;
+
+// Input State
+const keys = {};
+const mouse = { x: 0, y: 0, rawX: 0, rawY: 0, down: false };
+
+// Pre-allocated Global Vectors (Zero GC Allocation per frame)
+const _vFwd = new THREE.Vector3(), _vUp = new THREE.Vector3(), _vRight = new THREE.Vector3();
+const _vVel = new THREE.Vector3(), _vTemp = new THREE.Vector3();
+const _qPitch = new THREE.Quaternion(), _qYaw = new THREE.Quaternion(), _qRoll = new THREE.Quaternion();
+const _xAxis = new THREE.Vector3(1,0,0), _yAxis = new THREE.Vector3(0,1,0), _zAxis = new THREE.Vector3(0,0,1);
+
+/**
+ * ------------------------------------------------------------------
+ * 2. PROCEDURAL ENVIRONMENT, LIGHTING & SHADERS
+ * ------------------------------------------------------------------
+ */
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.4);
+scene.add(ambientLight);
+
+const dirLight = new THREE.DirectionalLight(0xfff5e6, 1.5);
+dirLight.castShadow = true;
+dirLight.shadow.camera.left = -1000; dirLight.shadow.camera.right = 1000;
+dirLight.shadow.camera.top = 1000; dirLight.shadow.camera.bottom = -1000;
+dirLight.shadow.camera.near = 100; dirLight.shadow.camera.far = 6000;
+dirLight.shadow.mapSize.width = 2048; dirLight.shadow.mapSize.height = 2048;
+scene.add(dirLight);
+scene.add(dirLight.target);
+
+// Procedural Atmospheric Skybox
+const skyGeo = new THREE.SphereGeometry(25000, 32, 15);
+const skyMat = new THREE.ShaderMaterial({
+    uniforms: {
+        topColor: { value: new THREE.Color(0x0044ff) },
+        bottomColor: { value: new THREE.Color(0xaaddff) },
+        offset: { value: 33 },
+        exponent: { value: 0.6 }
+    },
+    vertexShader: ` varying vec3 vWorldPosition; void main() { vec4 worldPosition = modelMatrix * vec4(position, 1.0); vWorldPosition = worldPosition.xyz; gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0); } `,
+    fragmentShader: ` uniform vec3 topColor; uniform vec3 bottomColor; uniform float offset; uniform float exponent; varying vec3 vWorldPosition; void main() { float h = normalize(vWorldPosition + vec3(0.0, offset, 0.0)).y; gl_FragColor = vec4(mix(bottomColor, topColor, max(pow(max(h , 0.0), exponent), 0.0)), 1.0); } `,
+    side: THREE.BackSide, fog: false
+});
+const sky = new THREE.Mesh(skyGeo, skyMat);
+scene.add(sky);
+
+// Volumetric Sun Lens Flare
+const sunCanvas = document.createElement('canvas'); sunCanvas.width = 512; sunCanvas.height = 512;
+const ctxSun = sunCanvas.getContext('2d');
+const sunGrad = ctxSun.createRadialGradient(256, 256, 0, 256, 256, 256);
+sunGrad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+sunGrad.addColorStop(0.1, 'rgba(255, 240, 200, 0.8)');
+sunGrad.addColorStop(0.5, 'rgba(255, 150, 50, 0.3)');
+sunGrad.addColorStop(1, 'rgba(255, 100, 0, 0)');
+ctxSun.fillStyle = sunGrad; ctxSun.fillRect(0,0,512,512);
+
+const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(sunCanvas), blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+sunSprite.scale.set(10000, 10000, 1);
+scene.add(sunSprite);
+
+// Shimmering PBR Ocean
+const waterCanvas = document.createElement('canvas'); waterCanvas.width = 256; waterCanvas.height = 256;
+const wCtx = waterCanvas.getContext('2d'); wCtx.fillStyle = '#8080ff'; wCtx.fillRect(0,0,256,256);
+for(let i=0; i<10000; i++) {
+    const r = 128 + (Math.random()-0.5)*50; const g = 128 + (Math.random()-0.5)*50;
+    wCtx.fillStyle = `rgb(${r},${g},255)`; wCtx.fillRect(Math.random()*256, Math.random()*256, 2, 2);
+}
+const waterTex = new THREE.CanvasTexture(waterCanvas);
+waterTex.wrapS = waterTex.wrapT = THREE.RepeatWrapping; waterTex.repeat.set(500, 500);
+
+const oceanMat = new THREE.MeshStandardMaterial({
+    color: 0x051525, transparent: true, opacity: 0.85, roughness: 0.1, metalness: 0.9, normalMap: waterTex, normalScale: new THREE.Vector2(0.8, 0.8)
+});
+const ocean = new THREE.Mesh(new THREE.PlaneGeometry(150000, 150000), oceanMat);
+ocean.rotation.x = -Math.PI/2; ocean.position.y = -5;
+scene.add(ocean);
+
+// Procedural Textured Terrain
+const groundGeo = new THREE.PlaneGeometry(100000, 100000, 300, 300);
+groundGeo.rotateX(-Math.PI/2);
+const pos = groundGeo.attributes.position;
+const colors = []; const colorObj = new THREE.Color();
+
+function getTerrainHeight(x, z) {
+    const dist = Math.sqrt(x*x + z*z);
+    if (dist < 3000) return 0; // Flat runway zone
+    const blend = Math.min((dist - 3000) / 2000, 1.0);
+    let noise = Math.sin(x*0.0005)*Math.cos(z*0.0005)*1200 + Math.sin(x*0.0015 + z*0.001)*400 + Math.sin(x*0.004 + z*0.004)*150;
+    return Math.max(-50, noise) * blend;
+}
+
+for(let i=0; i<pos.count; i++) {
+    const x = pos.getX(i), z = pos.getZ(i);
+    const y = getTerrainHeight(x, z);
+    pos.setY(i, y);
+    
+    const slope = 1.0 - new THREE.Vector3(getTerrainHeight(x-10, z)-getTerrainHeight(x+10, z), 20, getTerrainHeight(x, z-10)-getTerrainHeight(x, z+10)).normalize().y;
+    
+    if (y > 900) colorObj.setHex(0xffffff); // Snow cap
+    else if (y > 350 || slope > 0.3) colorObj.setHex(0x555a5e); // Rocky cliffs
+    else if (y > 20) colorObj.setHex(0x3e5231); // Highland grass
+    else colorObj.setHex(0x6b5c42); // Dirt/Sand
+    
+    const nC = (Math.random()-0.5)*0.1;
+    colors.push(Math.max(0,Math.min(1,colorObj.r+nC)), Math.max(0,Math.min(1,colorObj.g+nC)), Math.max(0,Math.min(1,colorObj.b+nC)));
+}
+groundGeo.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
+groundGeo.computeVertexNormals();
+
+const gtCanvas = document.createElement('canvas'); gtCanvas.width = 512; gtCanvas.height = 512;
+const gtCtx = gtCanvas.getContext('2d'); gtCtx.fillStyle = '#fff'; gtCtx.fillRect(0,0,512,512);
+for(let i=0; i<15000; i++) { gtCtx.fillStyle = Math.random()>0.5?'#ccc':'#fff'; gtCtx.fillRect(Math.random()*512, Math.random()*512, 2, 2); }
+const gtTex = new THREE.CanvasTexture(gtCanvas);
+gtTex.wrapS = gtTex.wrapT = THREE.RepeatWrapping; gtTex.repeat.set(500, 500);
+
+const terrain = new THREE.Mesh(groundGeo, new THREE.MeshStandardMaterial({ vertexColors: true, map: gtTex, roughness: 0.9, metalness: 0.1 }));
+terrain.receiveShadow = true;
+scene.add(terrain);
+
+// Volumetric Overlapping Clouds (InstancedMesh)
+const PUFF_COUNT = 1500;
+const cloudMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 1), new THREE.MeshLambertMaterial({color: 0xffffff, transparent: true, opacity: 0.5, flatShading: true}), PUFF_COUNT);
+let puffIdx = 0;
+for(let i=0; i<200 && puffIdx < PUFF_COUNT; i++) {
+    const cx = (Math.random()-0.5)*60000, cz = (Math.random()-0.5)*60000, cy = 2000 + Math.random()*2500;
+    const numPuffs = 5 + Math.floor(Math.random()*5);
+    for(let j=0; j<numPuffs && puffIdx < PUFF_COUNT; j++) {
+        const dummyMatrix = new THREE.Object3D();
+        dummyMatrix.position.set(cx + (Math.random()-0.5)*300, cy + (Math.random()-0.5)*100, cz + (Math.random()-0.5)*300);
+        const s = 100 + Math.random()*200;
+        dummyMatrix.scale.set(s, s*0.6, s); 
+        dummyMatrix.rotation.set(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI); 
+        dummyMatrix.updateMatrix();
+        cloudMesh.setMatrixAt(puffIdx++, dummyMatrix.matrix);
+    }
+}
+cloudMesh.count = puffIdx;
+scene.add(cloudMesh);
+
+// Runway Strip
+const runwayGroup = new THREE.Group();
+const runway = new THREE.Mesh(new THREE.BoxGeometry(80, 2, 4000), new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8 }));
+runway.receiveShadow = true; runwayGroup.add(runway);
+const line = new THREE.Mesh(new THREE.PlaneGeometry(2, 3800), new THREE.MeshBasicMaterial({ color: 0xffffff }));
+line.rotation.x = -Math.PI/2; line.position.y = 1.05; runwayGroup.add(line);
+scene.add(runwayGroup);
+
+/**
+ * ------------------------------------------------------------------
+ * 3. COMPOSITE 3D MODELS (STEALTH JETS - BUG FIXED)
+ * ------------------------------------------------------------------
+ */
+function createJet(isEnemy) {
+    const group = new THREE.Group();
+    const mMain = new THREE.MeshStandardMaterial({ color: isEnemy ? 0x222428 : 0x5a6a7a, roughness: 0.3, metalness: 0.6 });
+    const mWing = new THREE.MeshStandardMaterial({ color: isEnemy ? 0x1a1c20 : 0x404d59, roughness: 0.4, metalness: 0.5 });
+    const mGlass = new THREE.MeshStandardMaterial({ color: 0x050a10, roughness: 0.05, metalness: 0.9 });
+    const mDark = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.8, metalness: 0.2 });
+
+    const fuse = new THREE.Mesh(new THREE.CylinderGeometry(0.8, 1.2, 14, 12), mMain);
+    fuse.rotation.x = Math.PI/2; fuse.castShadow = true; group.add(fuse);
+
+    const nose = new THREE.Mesh(new THREE.ConeGeometry(0.8, 5, 12), mMain);
+    nose.rotation.x = Math.PI/2; nose.position.z = -9.5; nose.castShadow = true; group.add(nose);
+
+    // CRITICAL BUG FIX: Replaced unsupported 'CapsuleGeometry' with elegantly scaled 'SphereGeometry'
+    const cockpit = new THREE.Mesh(new THREE.SphereGeometry(0.7, 16, 16), mGlass);
+    cockpit.scale.set(1, 1.2, 3.5); cockpit.position.set(0, 0.8, -3.5); group.add(cockpit);
+
+    // Delta Wings
+    const wings = new THREE.Mesh(new THREE.BoxGeometry(16, 0.15, 8), mWing);
+    wings.position.set(0, -0.2, 1); wings.castShadow = true;
+    const wPos = wings.geometry.attributes.position;
+    for(let i=0; i<wPos.count; i++) {
+        let x = Math.abs(wPos.getX(i));
+        if(x > 1) { wPos.setZ(i, wPos.getZ(i) + x * 0.4); if(x > 4) wPos.setX(i, wPos.getX(i) * 0.8); }
+    }
+    wings.geometry.computeVertexNormals(); group.add(wings);
+
+    // Tail Elevators
+    const tail = new THREE.Mesh(new THREE.BoxGeometry(7, 0.15, 3), mWing);
+    tail.position.set(0, 0, 7);
+    const tPos = tail.geometry.attributes.position;
+    for(let i=0; i<tPos.count; i++) if(Math.abs(tPos.getX(i)) > 1) tPos.setZ(i, tPos.getZ(i) + 1.5);
+    tail.geometry.computeVertexNormals(); group.add(tail);
+
+    // Twin Canted Vertical Stabilizers
+    const finGeo = new THREE.BoxGeometry(0.15, 2.5, 3);
+    const fPos = finGeo.attributes.position;
+    for(let i=0; i<fPos.count; i++) if(fPos.getY(i) > 0) fPos.setZ(i, fPos.getZ(i) + 1.5);
+    finGeo.computeVertexNormals();
+    
+    const fin1 = new THREE.Mesh(finGeo, mWing); fin1.position.set(1.5, 1.2, 6.5); fin1.rotation.z = -0.25; group.add(fin1);
+    const fin2 = new THREE.Mesh(finGeo, mWing); fin2.position.set(-1.5, 1.2, 6.5); fin2.rotation.z = 0.25; group.add(fin2);
+
+    // Dual Exhausts & Inner Glow
+    const eGeo = new THREE.CylinderGeometry(0.5, 0.65, 1.5, 12); eGeo.rotateX(Math.PI/2);
+    const eng1 = new THREE.Mesh(eGeo, mDark); eng1.position.set(0.6, 0, 7.5); group.add(eng1);
+    const eng2 = new THREE.Mesh(eGeo, mDark); eng2.position.set(-0.6, 0, 7.5); group.add(eng2);
+
+    const glowMat = new THREE.MeshBasicMaterial({ color: isEnemy ? 0xff4400 : 0x00ccff, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending });
+    const glowL = new THREE.Mesh(new THREE.ConeGeometry(0.4, 3, 12), glowMat);
+    glowL.rotation.x = -Math.PI/2; glowL.position.set(0.6, 0, 8.5); glowL.name = 'engGlowL'; group.add(glowL);
+    const glowR = new THREE.Mesh(new THREE.ConeGeometry(0.4, 3, 12), glowMat);
+    glowR.rotation.x = -Math.PI/2; glowR.position.set(-0.6, 0, 8.5); glowR.name = 'engGlowR'; group.add(glowR);
+
+    return group;
+}
+
+const player = createJet(false);
+scene.add(player);
+
+/**
+ * ------------------------------------------------------------------
+ * 4. ZERO-GC OBJECT POOLS (VFX PARTICLE ENGINE)
+ * ------------------------------------------------------------------
+ */
+const dummyMatrix = new THREE.Object3D();
+
+// 1. Bullets Pool
+const MAX_BULLETS = 200;
+const bullets = [];
+const bulletGeo = new THREE.CylinderGeometry(0.15, 0.15, 16, 4); bulletGeo.rotateX(Math.PI/2);
+const bulletMatP = new THREE.MeshBasicMaterial({ color: 0x00e5ff, blending: THREE.AdditiveBlending });
+const bulletMatE = new THREE.MeshBasicMaterial({ color: 0xff3300, blending: THREE.AdditiveBlending });
+
+for(let i=0; i<MAX_BULLETS; i++) {
+    let m = new THREE.Mesh(bulletGeo, bulletMatP); m.visible = false; scene.add(m);
+    bullets.push({ mesh: m, active: false, life: 0, isPlayer: true, vel: new THREE.Vector3(), lastPos: new THREE.Vector3() });
+}
+
+function fireBullet(pos, quat, planeSpeed, isPlayer) {
+    let b = bullets.find(x => !x.active);
+    if(b) {
+        b.active = true; b.isPlayer = isPlayer; b.life = 2.5;
+        b.mesh.visible = true; b.mesh.material = isPlayer ? bulletMatP : bulletMatE;
+        _vFwd.set(0,0,-1).applyQuaternion(quat);
+        b.mesh.position.copy(pos).addScaledVector(_vFwd, 15);
+        b.lastPos.copy(b.mesh.position);
+        b.mesh.quaternion.copy(quat);
+        b.vel.copy(_vFwd).multiplyScalar(planeSpeed + 2000); 
+    }
+}
+
+// 2. Enemies Pool
+const MAX_ENEMIES = 20;
+const enemies = [];
+for(let i=0; i<MAX_ENEMIES; i++) {
+    let m = createJet(true); m.visible = false; scene.add(m);
+    enemies.push({ mesh: m, active: false, hp: 100, fireTimer: 0, speed: 180 + Math.random()*80 });
+}
+
+// 3. Centralized Particle Engine (Afterburners, Contrails, Explosions)
+const _c = new THREE.Color();
+
+// Afterburners
+const MAX_AB = 1200;
+const abMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.3, 0.3, 0.3), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }), MAX_AB);
+abMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+abMesh.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(MAX_AB * 3), 3);
+scene.add(abMesh);
+const abParticles = [];
+for(let i=0; i<MAX_AB; i++) {
+    abParticles.push({ active: false, life: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), scale: 1 });
+    dummyMatrix.scale.setScalar(0); dummyMatrix.updateMatrix(); abMesh.setMatrixAt(i, dummyMatrix.matrix);
+    _c.setHex(0xffffff); abMesh.setColorAt(i, _c);
+}
+let abIdx = 0;
+function spawnAfterburner(pos, vel, isPlayer) {
+    let p = abParticles[abIdx]; p.active = true; p.life = 1.0; p.pos.copy(pos);
+    p.vel.copy(vel).add(new THREE.Vector3((Math.random()-0.5)*8, (Math.random()-0.5)*8, (Math.random()-0.5)*8)); p.scale = 1.5 + Math.random();
+    _c.setHex(isPlayer ? 0x00e5ff : 0xff4400); abMesh.setColorAt(abIdx, _c);
+    abIdx = (abIdx + 1) % MAX_AB;
+}
+
+// Contrails
+const MAX_TRAILS = 1200;
+const trailMesh = new THREE.InstancedMesh(new THREE.BoxGeometry(0.6, 0.6, 0.6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.3, depthWrite: false }), MAX_TRAILS);
+trailMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+scene.add(trailMesh);
+const trails = [];
+for(let i=0; i<MAX_TRAILS; i++) { trails.push({ active: false, life: 0, pos: new THREE.Vector3(), scale: 1 }); dummyMatrix.scale.setScalar(0); dummyMatrix.updateMatrix(); trailMesh.setMatrixAt(i, dummyMatrix.matrix); }
+let trailIdx = 0;
+function spawnTrail(pos) { let t = trails[trailIdx]; t.active = true; t.life = 1.0; t.pos.copy(pos); t.scale = 1.0; trailIdx = (trailIdx + 1) % MAX_TRAILS; }
+
+// Explosions
+const MAX_EXP = 800;
+const expMesh = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshBasicMaterial({ color: 0xffaa00, transparent: true, opacity: 0.9, blending: THREE.AdditiveBlending }), MAX_EXP);
+expMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+scene.add(expMesh);
+const exps = [];
+for(let i=0; i<MAX_EXP; i++) { exps.push({ active: false, life: 0, pos: new THREE.Vector3(), vel: new THREE.Vector3(), scale: 1 }); dummyMatrix.scale.setScalar(0); dummyMatrix.updateMatrix(); expMesh.setMatrixAt(i, dummyMatrix.matrix); }
+let expIdx = 0;
+function spawnExplosion(pos, isLarge = false) {
+    let count = isLarge ? 50 : 15;
+    for(let i=0; i<count; i++) {
+        let p = exps[expIdx]; p.active = true; p.life = 1.0; p.pos.copy(pos);
+        let force = isLarge ? 300 : 120; p.vel.set((Math.random()-0.5)*force, (Math.random()-0.5)*force, (Math.random()-0.5)*force);
+        p.scale = isLarge ? 4 + Math.random()*8 : 1.5 + Math.random()*4;
+        expIdx = (expIdx + 1) % MAX_EXP;
+    }
+}
+
+// Swept Collision
+function pointLineDistSq(p, a, b) {
+    const l2 = a.distanceToSquared(b);
+    if(l2 === 0) return p.distanceToSquared(a);
+    let t = Math.max(0, Math.min(1, ((p.x - a.x)*(b.x - a.x) + (p.y - a.y)*(b.y - a.y) + (p.z - a.z)*(b.z - a.z)) / l2));
+    _vTemp.set(a.x + t*(b.x - a.x), a.y + t*(b.y - a.y), a.z + t*(b.z - a.z)); return p.distanceToSquared(_vTemp);
+}
+
+/**
+ * ------------------------------------------------------------------
+ * 5. GAME STATE & INPUTS
+ * ------------------------------------------------------------------
+ */
+window.addEventListener('keydown', e => keys[e.code] = true);
+window.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('mousedown', e => { if(e.button===0) mouse.down = true; });
+window.addEventListener('mouseup', e => { if(e.button===0) mouse.down = false; });
+window.addEventListener('wheel', e => { if(gameState === 'PLAYING') targetSpeed = Math.max(0, Math.min(MAX_SPEED, targetSpeed + (e.deltaY < 0 ? 30 : -30))); });
+window.addEventListener('mousemove', e => { mouse.rawX = e.clientX; mouse.rawY = e.clientY; mouse.x = (e.clientX / window.innerWidth) * 2 - 1; mouse.y = -(e.clientY / window.innerHeight) * 2 + 1; });
+window.addEventListener('resize', () => { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); });
+
+document.getElementById('start-btn').addEventListener('click', startGame);
+document.getElementById('restart-btn').addEventListener('click', startGame);
+
+function startGame() {
+    gameState = 'PLAYING';
+    document.getElementById('start-screen').classList.add('hidden');
+    document.getElementById('gameover-screen').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    
+    player.position.set(0, 1.2, 1800); player.quaternion.identity(); player.visible = true;
+    hp = 100; score = 0; currentSpeed = 0; targetSpeed = 0; isLanded = true;
+    
+    bullets.forEach(b => { b.active = false; b.mesh.visible = false; }); enemies.forEach(e => { e.active = false; e.mesh.visible = false; });
+    [abParticles, trails, exps].forEach(arr => arr.forEach(p => p.active = false));
+}
+
+function gameOver(reason) {
+    gameState = 'GAMEOVER'; spawnExplosion(player.position, true); player.visible = false;
+    document.getElementById('hud').classList.add('hidden'); document.getElementById('gameover-screen').classList.remove('hidden');
+    document.getElementById('final-score').innerText = score; document.getElementById('death-reason').innerText = reason;
+}
+
+/**
+ * ------------------------------------------------------------------
+ * 6. SYSTEMS LOGIC
+ * ------------------------------------------------------------------
+ */
+function updatePlayer(dt) {
+    if (keys['KeyW']) targetSpeed += 120 * dt;
+    if (keys['KeyS']) targetSpeed -= 120 * dt;
+    targetSpeed = Math.max(0, Math.min(MAX_SPEED, targetSpeed));
+    currentSpeed += (targetSpeed - currentSpeed) * dt * 2.0;
+
+    let pitchIn = 0, yawIn = 0, rollIn = 0;
+    if (Math.abs(mouse.y) > 0.05) pitchIn = mouse.y * 1.8;
+    if (Math.abs(mouse.x) > 0.05) { rollIn = -mouse.x * 2.5; yawIn = -mouse.x * 0.5; }
+    if (keys['KeyA'] || keys['ArrowLeft']) { rollIn = 3.0; yawIn = 1.0; }
+    if (keys['KeyD'] || keys['ArrowRight']) { rollIn = -3.0; yawIn = -1.0; }
+    if (keys['ArrowUp']) pitchIn = -2.0;
+    if (keys['ArrowDown']) pitchIn = 2.0;
+
+    let auth = Math.max(0.1, Math.min(1.0, currentSpeed / STALL_SPEED));
+    if (isLanded) { rollIn = 0; auth = 0.5; if (pitchIn > 0 && currentSpeed < 90) pitchIn = 0; if (pitchIn < 0) pitchIn = 0; }
+
+    _qPitch.setFromAxisAngle(_xAxis, pitchIn * auth * dt);
+    _qYaw.setFromAxisAngle(_yAxis, yawIn * auth * dt);
+    _qRoll.setFromAxisAngle(_zAxis, rollIn * auth * dt);
+    player.quaternion.multiply(_qYaw).multiply(_qPitch).multiply(_qRoll).normalize();
+
+    _vFwd.set(0,0,-1).applyQuaternion(player.quaternion);
+    _vVel.copy(_vFwd).multiplyScalar(currentSpeed);
+    
+    isStalling = false;
+    if (!isLanded && currentSpeed < STALL_SPEED) {
+        isStalling = true; let sFactor = 1.0 - (currentSpeed / STALL_SPEED); _vVel.y -= GRAVITY * sFactor;
+        if (player.position.y > 50 && _vFwd.y > -0.5) player.quaternion.multiply(_qPitch.setFromAxisAngle(_xAxis, -1.0 * sFactor * dt)).normalize();
+    }
+    player.position.addScaledVector(_vVel, dt);
+
+    // Particle Engine VFX: Engine Glow & Afterburners
+    let glowScale = 0.5 + (currentSpeed / MAX_SPEED) * 1.5;
+    player.children.forEach(c => { if(c.name.startsWith('engGlow')) { c.scale.set(glowScale, 1, glowScale); c.material.opacity = 0.3 + glowScale * 0.3; } });
+    if(!isLanded && currentSpeed > 50) {
+        let emitRate = Math.floor((currentSpeed / MAX_SPEED) * 3);
+        let pVel = _vFwd.clone().multiplyScalar(-currentSpeed * 0.5);
+        for(let i=0; i<emitRate; i++) {
+            spawnAfterburner(_vTemp.set(0.6, 0, 7.5).applyQuaternion(player.quaternion).add(player.position), pVel, true);
+            spawnAfterburner(_vTemp.set(-0.6, 0, 7.5).applyQuaternion(player.quaternion).add(player.position), pVel, true);
+        }
+    }
+
+    // Particle Engine VFX: Wingtip Contrails
+    if (!isLanded && (currentSpeed > 250 || Math.abs(pitchIn) > 0.8 || Math.abs(rollIn) > 1.0)) {
+        spawnTrail(_vTemp.set(7.5, -0.2, 2.5).applyQuaternion(player.quaternion).add(player.position));
+        spawnTrail(_vTemp.set(-7.5, -0.2, 2.5).applyQuaternion(player.quaternion).add(player.position));
+    }
+
+    // Advanced Ground Detection
+    let groundY = getTerrainHeight(player.position.x, player.position.z);
+    let isOverRunway = Math.abs(player.position.x) < 50 && Math.abs(player.position.z) < 2000;
+    let floorY = isOverRunway ? 1.2 : groundY + 1.2;
+
+    if (player.position.y <= floorY) {
+        player.position.y = floorY; _vUp.set(0,1,0).applyQuaternion(player.quaternion);
+        if (isOverRunway && _vUp.y > 0.8 && currentSpeed < 180 && pitchIn >= -0.1 && _vVel.y > -35) {
+            if (!isLanded) { isLanded = true; let euler = new THREE.Euler().setFromQuaternion(player.quaternion, 'YXZ'); euler.z = 0; player.quaternion.setFromEuler(euler); }
+            if (currentSpeed < 20) hp = Math.min(100, hp + 20 * dt);
+            if (!keys['KeyW']) targetSpeed = Math.max(0, targetSpeed - 60 * dt);
+        } else { gameOver("AIRCRAFT DESTROYED: TERRAIN COLLISION"); }
+    } else { isLanded = false; }
+
+    if (player.position.x**2 + player.position.z**2 > 400000000) { 
+        document.getElementById('warning').style.display = 'block'; document.getElementById('warning').innerText = 'RETURN TO COMBAT ZONE';
+        _vTemp.set(-player.position.x, 0, -player.position.z).normalize();
+        player.quaternion.slerp(new THREE.Quaternion().setFromUnitVectors(_vFwd, _vTemp), dt * 0.5); 
+    } else {
+        document.getElementById('warning').style.display = isStalling ? 'block' : 'none';
+        if (isStalling) document.getElementById('warning').innerText = 'STALL WARNING';
+    }
+
+    fireCooldown -= dt;
+    if ((keys['Space'] || mouse.down) && fireCooldown <= 0 && !isLanded) { fireBullet(player.position, player.quaternion, currentSpeed, true); fireCooldown = 0.1; }
+}
+
+function updateEnemies(dt) {
+    if (isLanded) return;
+    spawnTimer -= dt;
+    if (enemies.filter(e => e.active).length < Math.min(MAX_ENEMIES, 5 + Math.floor(score/5)) && spawnTimer <= 0) {
+        let e = enemies.find(en => !en.active);
+        if (e) {
+            e.active = true; e.hp = 100; e.fireTimer = Math.random(); e.mesh.visible = true;
+            _vFwd.set(0,0,-1).applyQuaternion(player.quaternion); _vRight.set(1,0,0).applyQuaternion(player.quaternion);
+            e.mesh.position.copy(player.position).add(_vFwd.multiplyScalar(4000).add(_vRight.multiplyScalar((Math.random()-0.5)*3000)));
+            e.mesh.position.y += 800 + Math.random()*1500; e.mesh.lookAt(player.position); spawnTimer = 1.5;
+        }
+    }
+
+    enemies.forEach(e => {
+        if (!e.active) return;
+        let distSq = e.mesh.position.distanceToSquared(player.position);
+        if (distSq > 100000000) { e.active = false; e.mesh.visible = false; return; }
+        
+        _vTemp.subVectors(player.position, e.mesh.position).normalize();
+        e.mesh.quaternion.slerp(new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(e.mesh.position, e.mesh.position.clone().add(_vTemp), _yAxis)), dt * 1.8);
+        _vFwd.set(0,0,-1).applyQuaternion(e.mesh.quaternion);
+        e.mesh.position.addScaledVector(_vFwd, e.speed * dt);
+        
+        if (e.mesh.position.y < getTerrainHeight(e.mesh.position.x, e.mesh.position.z) + 300) e.mesh.position.y += 150 * dt;
+        
+        // Enemy Afterburners
+        if(e.speed > 50) {
+            let pVel = _vFwd.clone().multiplyScalar(-e.speed * 0.5);
+            for(let i=0; i<2; i++) {
+                spawnAfterburner(_vTemp.set(0.6, 0, 7.5).applyQuaternion(e.mesh.quaternion).add(e.mesh.position), pVel, false);
+                spawnAfterburner(_vTemp.set(-0.6, 0, 7.5).applyQuaternion(e.mesh.quaternion).add(e.mesh.position), pVel, false);
+            }
+        }
+
+        e.fireTimer -= dt;
+        if (distSq < 16000000 && _vFwd.dot(_vTemp) > 0.95 && e.fireTimer <= 0) { fireBullet(e.mesh.position, e.mesh.quaternion, e.speed, false); e.fireTimer = 0.8 + Math.random(); }
+    });
+}
+
+function updateCollisions(dt) {
+    bullets.forEach(b => {
+        if (!b.active) return;
+        b.life -= dt;
+        if (b.life <= 0) { b.active = false; b.mesh.visible = false; return; }
+        
+        b.lastPos.copy(b.mesh.position);
+        b.mesh.position.addScaledVector(b.vel, dt);
+
+        if (b.mesh.position.y < getTerrainHeight(b.mesh.position.x, b.mesh.position.z)) { b.active = false; b.mesh.visible = false; spawnExplosion(b.mesh.position, false); return; }
+
+        if (b.isPlayer) {
+            for(let i=0; i<enemies.length; i++) {
+                let e = enemies[i];
+                if (e.active && pointLineDistSq(e.mesh.position, b.lastPos, b.mesh.position) < 150) {
+                    b.active = false; b.mesh.visible = false; e.hp -= 40; spawnExplosion(b.mesh.position, false);
+                    if (e.hp <= 0) { e.active = false; e.mesh.visible = false; spawnExplosion(e.mesh.position, true); score++; } break;
+                }
+            }
+        } else {
+            if (pointLineDistSq(player.position, b.lastPos, b.mesh.position) < 80) {
+                b.active = false; b.mesh.visible = false; hp -= 15; spawnExplosion(b.mesh.position, false);
+                const flash = document.getElementById('damage-flash'); flash.style.opacity = 0.8; setTimeout(() => flash.style.opacity = 0, 100);
+                if (hp <= 0) gameOver("HULL INTEGRITY COMPROMISED");
+            }
+        }
+    });
+}
+
+function updateParticles(dt) {
+    let uAB = false, uTr = false, uEx = false;
+    
+    abParticles.forEach((p, i) => {
+        if(!p.active) return;
+        p.life -= dt * 3.0;
+        if(p.life <= 0) { p.active = false; dummyMatrix.scale.setScalar(0); dummyMatrix.updateMatrix(); abMesh.setMatrixAt(i, dummyMatrix.matrix); uAB = true; return; }
+        p.pos.addScaledVector(p.vel, dt);
+        dummyMatrix.position.copy(p.pos); dummyMatrix.scale.setScalar(p.scale * p.life); dummyMatrix.rotation.set(p.life, p.life, 0); dummyMatrix.updateMatrix();
+        abMesh.setMatrixAt(i, dummyMatrix.matrix); uAB = true;
+    });
+    if(uAB) { abMesh.instanceMatrix.needsUpdate = true; abMesh.instanceColor.needsUpdate = true; }
+    
+    trails.forEach((t, i) => {
+        if(!t.active) return;
+        t.life -= dt * 1.5;
+        if(t.life <= 0) { t.active = false; dummyMatrix.scale.setScalar(0); dummyMatrix.updateMatrix(); trailMesh.setMatrixAt(i, dummyMatrix.matrix); uTr = true; return; }
+        t.scale += dt * 3.0;
+        dummyMatrix.position.copy(t.pos); dummyMatrix.scale.setScalar(t.scale); dummyMatrix.rotation.set(t.life*2, t.life*2, t.life*2); dummyMatrix.updateMatrix();
+        trailMesh.setMatrixAt(i, dummyMatrix.matrix); uTr = true;
+    });
+    if(uTr) trailMesh.instanceMatrix.needsUpdate = true;
+    
+    exps.forEach((p, i) => {
+        if(!p.active) return;
+        p.life -= dt * 1.5;
+        if(p.life <= 0) { p.active = false; dummyMatrix.scale.setScalar(0); dummyMatrix.updateMatrix(); expMesh.setMatrixAt(i, dummyMatrix.matrix); uEx = true; return; }
+        p.pos.addScaledVector(p.vel, dt); p.vel.multiplyScalar(0.95);
+        dummyMatrix.position.copy(p.pos); dummyMatrix.scale.setScalar(p.scale * p.life); dummyMatrix.rotation.set(p.life*5, p.life*5, 0); dummyMatrix.updateMatrix();
+        expMesh.setMatrixAt(i, dummyMatrix.matrix); uEx = true;
+    });
+    if(uEx) expMesh.instanceMatrix.needsUpdate = true;
+}
+
+function updateCamera(dt) {
+    _vFwd.set(0,0,-1).applyQuaternion(player.quaternion);
+    _vUp.set(0,1,0).applyQuaternion(player.quaternion);
+    
+    let idealOffset = player.position.clone().add(_vUp.clone().multiplyScalar(7)).add(_vFwd.clone().multiplyScalar(-28));
+    
+    // High Speed Camera Shake
+    if (currentSpeed > 300 && !isLanded) {
+        let shake = (currentSpeed - 300) * 0.02;
+        idealOffset.x += (Math.random()-0.5) * shake; idealOffset.y += (Math.random()-0.5) * shake;
+    }
+
+    camera.position.lerp(idealOffset, dt * 6.0);
+    camera.up.lerp(_vUp, dt * 6.0);
+    camera.lookAt(player.position.clone().add(_vFwd.multiplyScalar(100)));
+
+    camera.fov = 60 + (currentSpeed / MAX_SPEED) * 20;
+    camera.updateProjectionMatrix();
+
+    sky.position.copy(camera.position);
+    let sunDir = new THREE.Vector3(800, 1500, -2000).normalize();
+    dirLight.position.copy(player.position).add(sunDir.clone().multiplyScalar(2000));
+    dirLight.target.position.copy(player.position);
+    sunSprite.position.copy(camera.position).add(sunDir.clone().multiplyScalar(15000));
+}
+
+function updateHUD() {
+    document.getElementById('hp').innerText = Math.max(0, Math.floor(hp));
+    document.getElementById('hp-bar').style.width = Math.max(0, hp) + '%';
+    if (hp <= 30) document.getElementById('hp-container').classList.add('danger'); else document.getElementById('hp-container').classList.remove('danger');
+    
+    document.getElementById('score').innerText = score;
+    document.getElementById('spd').innerText = Math.floor(currentSpeed).toString().padStart(3, '0');
+    document.getElementById('alt').innerText = Math.max(0, Math.floor(player.position.y - 1.2)).toString().padStart(4, '0');
+    
+    let thrPct = Math.floor((targetSpeed / MAX_SPEED) * 100);
+    document.getElementById('thr-text').innerText = thrPct;
+    document.getElementById('thr-bar').style.width = thrPct + '%';
+    document.getElementById('runway-dist').innerText = `${Math.floor(Math.sqrt(player.position.x**2 + player.position.z**2))} M`;
+
+    const statusEl = document.getElementById('status');
+    if (isLanded) { statusEl.innerText = currentSpeed < 20 ? "REPAIRING..." : "TAXIING"; statusEl.style.color = "#38bdf8"; } 
+    else if (isStalling) { statusEl.innerText = "STALL"; statusEl.style.color = "#ef4444"; } 
+    else { statusEl.innerText = "AIRBORNE"; statusEl.style.color = "#10b981"; }
+
+    // Dynamic Horizon Roll
+    let euler = new THREE.Euler().setFromQuaternion(player.quaternion, 'ZXY');
+    document.getElementById('crosshair').style.transform = `translate(-50%, -50%) rotate(${-euler.z}rad)`;
+}
+
+/**
+ * ------------------------------------------------------------------
+ * 7. GAME LOOP
+ * ------------------------------------------------------------------
+ */
+player.position.set(0, 1.2, 1900); player.quaternion.identity();
+
+function gameLoop() {
+    requestAnimationFrame(gameLoop);
+    let dt = Math.min(clock.getDelta(), 0.1);
+
+    ocean.material.normalMap.offset.y -= dt * 0.05; // Shimmering water effect
+
+    if (gameState === 'PLAYING') {
+        updatePlayer(dt); updateEnemies(dt); updateCollisions(dt); updateParticles(dt); updateCamera(dt); updateHUD();
+    } else if (gameState === 'MENU' || gameState === 'GAMEOVER') {
+        const time = Date.now() * 0.00015;
+        camera.position.set(Math.sin(time)*150, 40, 1900 + Math.cos(time)*150); camera.lookAt(0, 5, 1900);
+        
+        sky.position.copy(camera.position);
+        let sunDir = new THREE.Vector3(800, 1500, -2000).normalize();
+        dirLight.position.set(0,0,1900).add(sunDir.clone().multiplyScalar(2000)); dirLight.target.position.set(0,0,1900);
+        sunSprite.position.copy(camera.position).add(sunDir.clone().multiplyScalar(15000));
+        updateParticles(dt);
+    }
+    renderer.render(scene, camera);
+}
+gameLoop();
+</script>
+</body>
+</html>
